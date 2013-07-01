@@ -9,7 +9,7 @@ export TEST_NAME=$(echo "$TEST" | rev | cut -d/ -f1 | rev)
 
 init()
 {
-  PATH=/sbin:/usr/sbin:$PATH rt insmod $MODULE
+  PATH=/sbin:/usr/sbin:$PATH rt insmod $MODULE output=raw order=4
 }
 
 uninit()
