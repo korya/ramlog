@@ -9,8 +9,6 @@
 #include <linux/seq_file.h>
 #include <linux/uaccess.h>
 
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-
 #define MAX_RAMLOG_MSG_LEN 128
 
 #define PROC_NAME "ramlog"
@@ -19,7 +17,7 @@ static char *output = "full";
 static int order = 10;
 
 module_param(output, charp, 0);
-MODULE_PARM_DESC(output, "Output format: raw, time, full");
+MODULE_PARM_DESC(output, "Output format: raw, time, full (defaul)");
 module_param(order, int, 0);
 MODULE_PARM_DESC(order, "Order size of the log (default 10)");
 
@@ -62,10 +60,11 @@ static inline ramlog_entry_t *allocate_entry(ramlog_t *l)
 	return &l->entries[circular_head];
 }
 
-static inline int ramlog_add(ramlog_t *l, const char *fmt, ...)
+int __ramlog(const char *fmt, ...)
 {
 	va_list args;
 	ramlog_entry_t *e;
+	ramlog_t *l = log;
 
 	if (atomic_read(&l->lock) > 0) /* List is being print */
 	    return 0;
@@ -77,6 +76,7 @@ static inline int ramlog_add(ramlog_t *l, const char *fmt, ...)
 
 	return 0;
 }
+EXPORT_SYMBOL(__ramlog);
 
 static ramlog_t *ramlog_alloc(int order, ramlog_fmt_t format)
 {
@@ -195,13 +195,13 @@ static int ramlog_seq_show(struct seq_file *s, void *v)
 	switch (l->format)
 	{
 	case FMT_RAW:
-		seq_printf(s, "%s\n", l->entries[*idx].buf);
+		seq_printf(s, "%s", l->entries[*idx].buf);
 		break;
 	case FMT_TIME:
-		seq_printf(s, "[%8d] %s\n", 0, l->entries[*idx].buf);
+		seq_printf(s, "[%8d] %s", 0, l->entries[*idx].buf);
 		break;
 	case FMT_FULL:
-		seq_printf(s, "[%8d] %s():%d: %s\n", 0, "", 0,
+		seq_printf(s, "[%8d] %s():%d: %s", 0, "", 0,
 			l->entries[*idx].buf);
 		break;
 	}
@@ -221,15 +221,14 @@ static struct seq_operations ramlog_seq_ops = {
 static ssize_t ramlog_proc_write(struct file *file, const char __user *buf,
 	size_t len, loff_t *off)
 {
-	char msg[MAX_RAMLOG_MSG_LEN];
+	char msg[MAX_RAMLOG_MSG_LEN] = {};
 
-	if (len > MAX_RAMLOG_MSG_LEN)
-		len = MAX_RAMLOG_MSG_LEN;
+	if (len >= MAX_RAMLOG_MSG_LEN)
+		len = MAX_RAMLOG_MSG_LEN - 1;
 	if (copy_from_user(msg, buf, len))
 		return -EFAULT;
 
-	msg[MIN(len, MAX_RAMLOG_MSG_LEN - 1)] = 0;
-	ramlog_add(log, "%s", msg);
+	__ramlog("%s\n", msg);
 
 	return len;
 }
